@@ -1,0 +1,63 @@
+{
+  "name": "blackbox-ai",
+  "version": "0.1.0",
+  "description": "Personal AI assistant that records and analyzes your computer activities",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "jest",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "ai",
+    "productivity",
+    "memory",
+    "assistant",
+    "recording",
+    "electron"
+  ],
+  "author": "BlackBox AI Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blackbox-ai/blackbox-ai.git"
+  },
+  "homepage": "https://blackbox-ai.com",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "active-win": "^8.2.1",
+    "axios": "^1.8.4",
+    "better-sqlite3": "^11.9.1",
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12",
+    "electron-store": "^8.2.0",
+    "node-microphone": "^0.1.6",
+    "node-webpmux": "^3.2.1",
+    "openai": "^4.95.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^6.30.0",
+    "screenshot-desktop": "^1.15.1",
+    "sequelize": "^6.37.7",
+    "sharp": "^0.34.1",
+    "sqlite3": "^5.1.7",
+    "tailwindcss": "^4.1.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.14.1",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^9.25.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
