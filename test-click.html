@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Click Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .button {
+      padding: 10px 20px;
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      min-height: 100px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Click Test</h1>
+  <p>Click the buttons below to test if click events are working:</p>
+  
+  <button id="btn1" class="button">Button 1</button>
+  <button id="btn2" class="button">Button 2</button>
+  <button id="btn3" class="button">Button 3</button>
+  
+  <div class="result" id="result">Results will appear here...</div>
+  
+  <script>
+    // Log to both console and the result div
+    function log(message) {
+      console.log(message);
+      const result = document.getElementById('result');
+      result.innerHTML += message + '<br>';
+    }
+    
+    // Add event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      log('DOM fully loaded');
+      
+      // Button 1 - addEventListener
+      const btn1 = document.getElementById('btn1');
+      btn1.addEventListener('click', function() {
+        log('Button 1 clicked (addEventListener)');
+      });
+      
+      // Button 2 - onclick property
+      const btn2 = document.getElementById('btn2');
+      btn2.onclick = function() {
+        log('Button 2 clicked (onclick property)');
+      };
+      
+      // Button 3 - inline onclick
+      document.getElementById('btn3').onclick = function() {
+        log('Button 3 clicked (inline onclick)');
+      };
+      
+      log('Event listeners added');
+    });
+  </script>
+</body>
+</html>

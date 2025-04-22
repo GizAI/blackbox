@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SVG to PNG Converter</title>
+  <style>
+    body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+    canvas { border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>SVG to PNG Converter</h1>
+  <div>
+    <img id="svgImage" src="icon.svg" style="display: none;">
+    <canvas id="canvas" width="512" height="512"></canvas>
+  </div>
+  <div style="margin-top: 20px;">
+    <button id="convertBtn">Convert to PNG</button>
+    <a id="downloadLink" download="icon.png" style="margin-left: 10px;">Download PNG</a>
+  </div>
+
+  <script>
+    window.onload = function() {
+      const img = document.getElementById('svgImage');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const downloadLink = document.getElementById('downloadLink');
+      const convertBtn = document.getElementById('convertBtn');
+
+      // Draw SVG on canvas when image is loaded
+      img.onload = function() {
+        ctx.drawImage(img, 0, 0, 512, 512);
+        updateDownloadLink();
+      };
+
+      // Update download link with canvas data
+      function updateDownloadLink() {
+        const dataURL = canvas.toDataURL('image/png');
+        downloadLink.href = dataURL;
+      }
+
+      // Convert button click handler
+      convertBtn.addEventListener('click', function() {
+        ctx.drawImage(img, 0, 0, 512, 512);
+        updateDownloadLink();
+        alert('Conversion complete! Click the download link to save the PNG.');
+      });
+    };
+  </script>
+</body>
+</html>

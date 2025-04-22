@@ -12,6 +12,7 @@ interface SettingsData {
   storage_limit: number;
   encryption_enabled: boolean;
   notification_enabled: boolean;
+  [key: string]: any;
 }
 
 const Settings: React.FC = () => {
@@ -28,70 +29,77 @@ const Settings: React.FC = () => {
     encryption_enabled: false,
     notification_enabled: true
   });
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
-  
+
   // Load settings
   useEffect(() => {
     const loadSettings = async () => {
       try {
         setLoading(true);
-        
+
         // Get settings from API
         const result = await window.api.getSettings();
-        
+
         // Update state with loaded settings
         if (result) {
           setSettings(result);
         }
-        
+
         setLoading(false);
       } catch (error) {
         console.error('Error loading settings:', error);
         setLoading(false);
       }
     };
-    
+
     loadSettings();
   }, []);
-  
+
   // Save settings
   const saveSettings = async () => {
     try {
       setSaving(true);
-      
+
       // Save settings via API
       await window.api.updateSettings(settings);
-      
+
       setSaveMessage('Settings saved successfully');
       setTimeout(() => setSaveMessage(''), 3000);
-      
+
       setSaving(false);
     } catch (error) {
       console.error('Error saving settings:', error);
       setSaveMessage('Error saving settings');
       setTimeout(() => setSaveMessage(''), 3000);
-      
+
       setSaving(false);
     }
   };
-  
+
   // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
-    
+
     if (name.includes('.')) {
       // Handle nested properties (e.g., ai_provider.provider)
       const [parent, child] = name.split('.');
-      setSettings(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent as keyof SettingsData],
-          [child]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      setSettings(prev => {
+        const newSettings = { ...prev };
+        const parentKey = parent as keyof SettingsData;
+        const parentValue = prev[parentKey];
+
+        if (typeof parentValue === 'object' && parentValue !== null) {
+          newSettings[parentKey] = {
+            ...parentValue,
+            [child]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+          };
         }
-      }));
+
+        return newSettings;
+      });
     } else {
       // Handle top-level properties
       setSettings(prev => ({
@@ -102,31 +110,31 @@ const Settings: React.FC = () => {
       }));
     }
   };
-  
+
   // Format bytes to human-readable size
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-  
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Settings</h1>
-        
+
         <div className="flex items-center">
           {saveMessage && (
             <span className={`mr-4 ${saveMessage.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>
               {saveMessage}
             </span>
           )}
-          
-          <button 
+
+          <button
             onClick={saveSettings}
             disabled={saving || loading}
             className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
@@ -135,7 +143,7 @@ const Settings: React.FC = () => {
           </button>
         </div>
       </div>
-      
+
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -146,7 +154,7 @@ const Settings: React.FC = () => {
             {/* Recording Settings */}
             <div>
               <h2 className="text-xl font-semibold mb-4">Recording Settings</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="flex items-center">
@@ -160,7 +168,7 @@ const Settings: React.FC = () => {
                     <span>Start recording automatically on launch</span>
                   </label>
                 </div>
-                
+
                 <div>
                   <label className="block mb-2">
                     Screenshot Interval (ms)
@@ -178,7 +186,7 @@ const Settings: React.FC = () => {
                     {(settings.screen_capture_interval / 1000).toFixed(1)} seconds between screenshots
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="block mb-2">
                     Web History Tracking Interval (ms)
@@ -196,7 +204,7 @@ const Settings: React.FC = () => {
                     {(settings.web_history_interval / 1000).toFixed(1)} seconds between web checks
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="block mb-2">
                     App Monitoring Interval (ms)
@@ -216,11 +224,11 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* AI Settings */}
             <div>
               <h2 className="text-xl font-semibold mb-4">AI Integration</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block mb-2">
@@ -236,7 +244,7 @@ const Settings: React.FC = () => {
                     <option value="gemini">Google Gemini</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block mb-2">
                     API Key
@@ -254,9 +262,9 @@ const Settings: React.FC = () => {
                   </p>
                 </div>
               </div>
-              
+
               <h2 className="text-xl font-semibold mb-4 mt-8">Storage & Privacy</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block mb-2">
@@ -278,7 +286,7 @@ const Settings: React.FC = () => {
                     Current limit: {formatBytes(settings.storage_limit)}
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="flex items-center">
                     <input
@@ -294,7 +302,7 @@ const Settings: React.FC = () => {
                     Encrypts all stored data with a local key
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="flex items-center">
                     <input
@@ -310,9 +318,9 @@ const Settings: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <button 
+            <button
               onClick={saveSettings}
               disabled={saving}
               className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"

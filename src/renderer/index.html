@@ -5,10 +5,404 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
   <title>BlackBox AI</title>
-  <link rel="stylesheet" href="./styles/tailwind.css">
+  <link rel="stylesheet" href="styles.css" id="main-stylesheet">
+  <script src="dev-mode.js"></script>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-  <div id="root"></div>
-  <script src="./index.js"></script>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h1>BlackBox AI</h1>
+      </div>
+
+      <div class="sidebar-nav">
+        <div class="nav-item active" data-tab="dashboard" id="nav-dashboard">
+          <i>📊</i> Dashboard
+        </div>
+        <div class="nav-item" data-tab="timeline" id="nav-timeline">
+          <i>⏱️</i> Timeline
+        </div>
+        <div class="nav-item" data-tab="insights" id="nav-insights">
+          <i>💡</i> AI Insights
+        </div>
+        <div class="nav-item" data-tab="settings" id="nav-settings">
+          <i>⚙️</i> Settings
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button id="toggle-recording" class="btn btn-danger" style="width: 100%;">Stop Recording</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Dashboard Tab -->
+      <div id="dashboard" class="tab-content active">
+        <div class="dashboard-header">
+          <h2 class="dashboard-title">Dashboard</h2>
+          <div class="d-flex align-items-center">
+            <button class="btn btn-primary mr-2" id="refresh-dashboard" title="Refresh dashboard data">
+              <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button class="btn btn-primary" id="generate-insights-btn">Generate AI Insights</button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Screenshots</h3>
+            <p id="screenshot-count">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Audio Recordings</h3>
+            <p id="audio-count">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Web History</h3>
+            <p id="web-count">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>App Usage</h3>
+            <p id="app-count">0</p>
+          </div>
+        </div>
+
+        <div class="stats-container">
+          <div class="stats-row">
+            <div class="stats-column">
+              <div class="timeline-container">
+                <div class="timeline-header">
+                  <h3 class="timeline-title">App Usage</h3>
+                </div>
+                <div id="app-usage-chart">
+                  <p>Loading app usage data...</p>
+                </div>
+              </div>
+            </div>
+            <div class="stats-column">
+              <div class="timeline-container">
+                <div class="timeline-header">
+                  <h3 class="timeline-title">Website Usage</h3>
+                </div>
+                <div id="website-chart">
+                  <p>Loading website data...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="timeline-container">
+          <div class="timeline-header">
+            <h3 class="timeline-title">Recent Activity</h3>
+          </div>
+
+          <div id="recent-activity" class="timeline">
+            <p>Loading recent activity...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline Tab -->
+      <div id="timeline" class="tab-content">
+        <div class="dashboard-header">
+          <h2 class="dashboard-title">Timeline</h2>
+          <div class="d-flex align-items-center">
+            <div class="mr-3">
+              <label for="group-by" class="mr-2">Group by:</label>
+              <select id="group-by" class="form-control">
+                <option value="hour">Hour</option>
+                <option value="activity">Activity Type</option>
+              </select>
+            </div>
+            <div class="mr-3">
+              <input type="date" id="timeline-date" class="form-control">
+            </div>
+            <div>
+              <button id="refresh-timeline" class="btn btn-primary" title="Refresh timeline data">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="timeline-container">
+          <div class="timeline-header">
+            <div class="timeline-filters">
+              <div class="timeline-filter active" data-filter="all">All</div>
+              <div class="timeline-filter" data-filter="screenshot">Screenshots</div>
+              <div class="timeline-filter" data-filter="audio">Audio</div>
+              <div class="timeline-filter" data-filter="web">Web</div>
+              <div class="timeline-filter" data-filter="app">Apps</div>
+            </div>
+          </div>
+
+          <div id="full-timeline" class="timeline">
+            <p>Select a date to view timeline</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Insights Tab -->
+      <div id="insights" class="tab-content">
+        <div class="dashboard-header">
+          <h2 class="dashboard-title">AI Insights</h2>
+          <div class="d-flex">
+            <button id="daily-insights-btn" class="btn btn-primary mr-2 active">Daily</button>
+            <button id="weekly-insights-btn" class="btn btn-primary mr-2">Weekly</button>
+            <button id="monthly-insights-btn" class="btn btn-primary">Monthly</button>
+          </div>
+        </div>
+
+        <div class="timeline-container">
+          <div class="timeline-header">
+            <h3 class="timeline-title">Activity Summary</h3>
+          </div>
+
+          <div id="insights-content" class="mt-4">
+            <p>Generating insights...</p>
+          </div>
+        </div>
+
+        <div class="stats-container">
+          <div class="stats-row">
+            <div class="stats-column">
+              <div class="timeline-container">
+                <div class="timeline-header">
+                  <h3 class="timeline-title">Productivity Score</h3>
+                </div>
+                <div id="productivity-chart" class="chart-container">
+                  <div class="chart-item">
+                    <div class="chart-label">Today</div>
+                    <div class="chart-bar-container">
+                      <div class="chart-bar" style="width: 85%"></div>
+                      <div class="chart-value">85%</div>
+                    </div>
+                  </div>
+                  <div class="chart-item">
+                    <div class="chart-label">This Week</div>
+                    <div class="chart-bar-container">
+                      <div class="chart-bar" style="width: 72%"></div>
+                      <div class="chart-value">72%</div>
+                    </div>
+                  </div>
+                  <div class="chart-item">
+                    <div class="chart-label">This Month</div>
+                    <div class="chart-bar-container">
+                      <div class="chart-bar" style="width: 68%"></div>
+                      <div class="chart-value">68%</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="stats-column">
+              <div class="timeline-container">
+                <div class="timeline-header">
+                  <h3 class="timeline-title">Focus Time</h3>
+                </div>
+                <div id="focus-chart" class="chart-container">
+                  <div class="chart-item">
+                    <div class="chart-label">Morning (6AM-12PM)</div>
+                    <div class="chart-bar-container">
+                      <div class="chart-bar" style="width: 90%"></div>
+                      <div class="chart-value">3h 30m</div>
+                    </div>
+                  </div>
+                  <div class="chart-item">
+                    <div class="chart-label">Afternoon (12PM-6PM)</div>
+                    <div class="chart-bar-container">
+                      <div class="chart-bar" style="width: 65%"></div>
+                      <div class="chart-value">2h 15m</div>
+                    </div>
+                  </div>
+                  <div class="chart-item">
+                    <div class="chart-label">Evening (6PM-12AM)</div>
+                    <div class="chart-bar-container">
+                      <div class="chart-bar" style="width: 40%"></div>
+                      <div class="chart-value">1h 20m</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="settings" class="tab-content">
+        <div class="dashboard-header">
+          <h2 class="dashboard-title">Settings</h2>
+          <div>
+            <button class="btn btn-primary" id="save-settings-btn">Save Settings</button>
+          </div>
+        </div>
+
+        <div class="timeline-container">
+          <div class="tabs">
+            <div class="tab active" data-settings-tab="recording" id="settings-tab-recording">Recording</div>
+            <div class="tab" data-settings-tab="ai" id="settings-tab-ai">AI Integration</div>
+            <div class="tab" data-settings-tab="storage" id="settings-tab-storage">Storage</div>
+          </div>
+
+          <div id="recording-settings" class="settings-tab-content active">
+            <div class="settings-group">
+              <h3 class="settings-group-title">General Recording Settings</h3>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="auto-start" checked>
+                <label for="auto-start">Start recording automatically on launch</label>
+              </div>
+
+              <div class="form-group mb-4">
+                <label for="screenshot-interval">Screenshot Interval (ms)</label>
+                <input type="number" id="screenshot-interval" value="10000" min="1000" step="1000" class="form-control">
+                <p id="screenshot-interval-label" class="form-text">10 seconds between screenshots</p>
+              </div>
+
+              <div class="form-group mb-4">
+                <label for="web-interval">Web History Tracking Interval (ms)</label>
+                <input type="number" id="web-interval" value="5000" min="1000" step="1000" class="form-control">
+                <p id="web-interval-label" class="form-text">5 seconds between web checks</p>
+              </div>
+
+              <div class="form-group mb-4">
+                <label for="app-interval">App Monitoring Interval (ms)</label>
+                <input type="number" id="app-interval" value="1000" min="500" step="500" class="form-control">
+                <p id="app-interval-label" class="form-text">1 second between app checks</p>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="settings-group-title">Screenshot Settings</h3>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="capture-all-monitors" checked>
+                <label for="capture-all-monitors">Capture all monitors</label>
+                <p class="form-text">When enabled, captures all connected monitors</p>
+              </div>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="skip-similar-images" checked>
+                <label for="skip-similar-images">Skip similar screenshots</label>
+                <p class="form-text">Avoids saving screenshots that are very similar to the previous one</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="ai-settings" class="settings-tab-content">
+            <div class="settings-group">
+              <h3 class="settings-group-title">AI Provider Settings</h3>
+
+              <div class="form-group mb-4">
+                <label for="ai-provider">AI Provider</label>
+                <select id="ai-provider" class="form-control">
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Google Gemini</option>
+                </select>
+                <p class="form-text">Select the AI provider for image and audio processing</p>
+              </div>
+
+              <div class="form-group mb-4">
+                <label for="api-key">API Key</label>
+                <input type="password" id="api-key" placeholder="Enter your API key" class="form-control">
+                <p class="form-text">Your API key is stored locally and never shared</p>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="settings-group-title">AI Processing Settings</h3>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="auto-process-screenshots" checked>
+                <label for="auto-process-screenshots">Automatically process screenshots</label>
+                <p class="form-text">Generate descriptions for screenshots as they are captured</p>
+              </div>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="auto-process-audio" checked>
+                <label for="auto-process-audio">Automatically transcribe audio</label>
+                <p class="form-text">Generate transcripts for audio recordings as they are captured</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="storage-settings" class="settings-tab-content">
+            <div class="settings-group">
+              <h3 class="settings-group-title">Storage Settings</h3>
+
+              <div class="form-group mb-4">
+                <label for="storage-limit">Storage Limit</label>
+                <select id="storage-limit" class="form-control">
+                  <option value="5368709120">5 GB</option>
+                  <option value="10737418240" selected>10 GB</option>
+                  <option value="21474836480">20 GB</option>
+                  <option value="53687091200">50 GB</option>
+                  <option value="107374182400">100 GB</option>
+                </select>
+                <p class="form-text">Maximum storage space to use for recorded data</p>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="settings-group-title">Screenshot Storage Settings</h3>
+
+              <div class="form-group mb-4">
+                <label for="screenshot-quality">Screenshot Quality</label>
+                <input type="range" id="screenshot-quality" min="10" max="100" value="75" class="form-control">
+                <p class="form-text">Higher quality uses more storage space</p>
+              </div>
+
+              <div class="form-group mb-4">
+                <label for="screenshot-format">Screenshot Format</label>
+                <select id="screenshot-format" class="form-control">
+                  <option value="webp" selected>WebP (best compression)</option>
+                  <option value="jpeg">JPEG (good compression)</option>
+                  <option value="png">PNG (lossless, larger files)</option>
+                </select>
+                <p class="form-text">File format for saving screenshots</p>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="settings-group-title">Security & Notifications</h3>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="encryption-enabled">
+                <label for="encryption-enabled">Enable encryption for stored data</label>
+                <p class="form-text">Encrypts all stored data with a local key</p>
+              </div>
+
+              <div class="form-check mb-4">
+                <input type="checkbox" id="notification-enabled" checked>
+                <label for="notification-enabled">Enable AI insights notifications</label>
+                <p class="form-text">Show notifications when new insights are available</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for viewing screenshots -->
+  <div id="screenshot-modal" class="modal">
+    <div class="modal-content">
+      <span class="modal-close">&times;</span>
+      <img id="modal-image" class="modal-image" src="" alt="Screenshot">
+    </div>
+  </div>
+
+  <!-- Navigation script (must be loaded first) -->
+  <script src="navigation.js"></script>
+
+  <!-- Audio recorder script -->
+  <script src="audio-recorder.js"></script>
+
+  <!-- Main script -->
+  <script type="module" src="main.js"></script>
 </body>
 </html>

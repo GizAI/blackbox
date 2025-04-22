@@ -13,16 +13,16 @@ const Insights: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null);
   const [generatingInsight, setGeneratingInsight] = useState(false);
-  
+
   // Load insights
   useEffect(() => {
     const loadInsights = async () => {
       try {
         setLoading(true);
-        
-        // Get insights from API
-        const result = await window.api.getInsights(50);
-        
+
+        // Get insights from AI
+        const result = await window.api.generateSummary('all');
+
         // Convert to insight objects
         const insightObjects: Insight[] = result.map((item: any) => ({
           id: item.id,
@@ -31,46 +31,46 @@ const Insights: React.FC = () => {
           type: item.type,
           metadata: item.metadata
         }));
-        
+
         // Sort by timestamp (newest first)
         insightObjects.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
+
         setInsights(insightObjects);
-        
+
         // Select the first insight by default
         if (insightObjects.length > 0 && !selectedInsight) {
           setSelectedInsight(insightObjects[0]);
         }
-        
+
         setLoading(false);
       } catch (error) {
         console.error('Error loading insights:', error);
         setLoading(false);
       }
     };
-    
+
     loadInsights();
-    
+
     // Set up listener for new insights
     const handleNewInsight = (insight: any) => {
       setInsights(prev => [insight, ...prev]);
     };
-    
+
     window.api.on('ai:insight', handleNewInsight);
-    
+
     return () => {
       window.api.off('ai:insight', handleNewInsight);
     };
   }, []);
-  
+
   // Generate new insight
   const generateInsight = async (timeframe: string) => {
     try {
       setGeneratingInsight(true);
-      
+
       // Generate insight
       const result = await window.api.generateSummary(timeframe);
-      
+
       if (result) {
         // Add to insights list
         const newInsight: Insight = {
@@ -80,23 +80,23 @@ const Insights: React.FC = () => {
           type: result.type,
           metadata: result.metadata
         };
-        
+
         setInsights(prev => [newInsight, ...prev]);
         setSelectedInsight(newInsight);
       }
-      
+
       setGeneratingInsight(false);
     } catch (error) {
       console.error('Error generating insight:', error);
       setGeneratingInsight(false);
     }
   };
-  
+
   // Get friendly name for insight type
   const getInsightTypeName = (type: string) => {
     if (type.startsWith('summary_')) {
       const timeframe = type.replace('summary_', '');
-      
+
       switch (timeframe) {
         case 'day':
           return 'Daily Summary';
@@ -108,31 +108,31 @@ const Insights: React.FC = () => {
           return 'Summary';
       }
     }
-    
+
     return 'Insight';
   };
-  
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">AI Insights</h1>
-        
+
         <div className="flex space-x-2">
-          <button 
+          <button
             onClick={() => generateInsight('day')}
             disabled={generatingInsight}
             className="px-3 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
           >
             {generatingInsight ? 'Generating...' : 'Daily Insight'}
           </button>
-          <button 
+          <button
             onClick={() => generateInsight('week')}
             disabled={generatingInsight}
             className="px-3 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
           >
             Weekly Insight
           </button>
-          <button 
+          <button
             onClick={() => generateInsight('month')}
             disabled={generatingInsight}
             className="px-3 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
@@ -141,7 +141,7 @@ const Insights: React.FC = () => {
           </button>
         </div>
       </div>
-      
+
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -153,7 +153,7 @@ const Insights: React.FC = () => {
             {insights.length > 0 ? (
               <div className="space-y-4">
                 {insights.map(insight => (
-                  <div 
+                  <div
                     key={insight.id}
                     className={`p-4 rounded-lg cursor-pointer ${
                       selectedInsight?.id === insight.id
@@ -180,7 +180,7 @@ const Insights: React.FC = () => {
               </div>
             )}
           </div>
-          
+
           {/* Detail panel */}
           <div className="w-2/3 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             {selectedInsight ? (
@@ -193,20 +193,20 @@ const Insights: React.FC = () => {
                     {new Date(selectedInsight.timestamp).toLocaleString()}
                   </span>
                 </div>
-                
+
                 <div className="prose dark:prose-invert max-w-none">
                   {selectedInsight.content.split('\n').map((paragraph, index) => (
                     <p key={index}>{paragraph}</p>
                   ))}
                 </div>
-                
+
                 {selectedInsight.metadata && selectedInsight.metadata.timeframe && (
                   <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                     <h3 className="font-medium mb-2">Time Period</h3>
                     <p className="text-gray-600 dark:text-gray-300">
                       {new Date(selectedInsight.metadata.startDate).toLocaleString()} to {new Date(selectedInsight.metadata.endDate).toLocaleString()}
                     </p>
-                    
+
                     {selectedInsight.metadata.dataPoints && (
                       <div className="mt-4 grid grid-cols-2 gap-4">
                         <div>

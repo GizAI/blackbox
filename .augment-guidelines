@@ -3,7 +3,7 @@
 ## Core Principles
 - Communicate with users in Korean, write code/docs in English.
 - 24/7 autonomous operation without human intervention
-- Keep frontend and backend development servers running at all times for user verification
+- Check for related code before coding to avoid duplication. Regularly review and refactor to eliminate redundant code.
 - After completing a task, check frontend/backend server logs, run necessary tests, and commit changes
 - Use latest libraries and best practices
 - Focus on implementing core features first
