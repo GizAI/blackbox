@@ -57,6 +57,7 @@ export interface AudioRecording extends BaseModel {
     channels?: number;
     size?: number;
     silenceMarkers?: Array<{start: number, end: number}>;
+    speechSegments?: Array<{start: number, end: number, duration: number}>;
   };
 }
 

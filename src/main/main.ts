@@ -63,7 +63,8 @@ async function initializeModules() {
 
     // Get settings from settings manager
     const settings = settingsManager.getSettings();
-    const autoStart = settings.recording.autoStart;
+    // Force autoStart to true to ensure recording starts automatically
+    const autoStart = true; // Override settings.recording.autoStart
 
     // Start recording modules if auto-start is enabled
     if (autoStart) {

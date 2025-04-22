@@ -17,9 +17,9 @@ if (window.audioRecorderInitialized) {
   let mediaRecorder = null;
   let audioChunks = [];
   let silenceDetectionEnabled = true;
-  let silenceThreshold = 0.05;
+  let silenceThreshold = 0.02; // Even lower threshold for better voice detection
   let silenceDuration = 0;
-  let maxSilenceDuration = 3000; // 3 seconds
+  let maxSilenceDuration = 1000; // 1 second - shorter to detect pauses between sentences
   let lastSilenceStart = 0;
   let isSilent = false;
   let audioContext = null;
@@ -29,6 +29,12 @@ if (window.audioRecorderInitialized) {
   let currentFilePath = null;
   let recordingStartTime = null;
   let isRecording = false; // 로컬에서 정의
+  let speechSegments = []; // Track speech segments
+  let currentSpeechStart = 0; // Track start of current speech segment
+  let minSpeechDuration = 1000; // Minimum speech duration to be considered meaningful (1 second)
+  let maxSpeechDuration = 30000; // Maximum speech segment duration (30 seconds)
+  let energyHistory = []; // Store recent energy levels for better detection
+  let energyHistorySize = 10; // Number of frames to keep in history
 
 // Check audio API support
 function checkAudioSupport() {
@@ -136,35 +142,91 @@ async function initAudioRecorder() {
   }
 }
 
-// Detect silence in audio
+// Calculate RMS (Root Mean Square) energy of audio buffer
+function calculateRMSEnergy(buffer) {
+  let sum = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    sum += buffer[i] * buffer[i];
+  }
+  return Math.sqrt(sum / buffer.length);
+}
+
+// Calculate ZCR (Zero Crossing Rate) of audio buffer
+function calculateZCR(buffer) {
+  let crossings = 0;
+  for (let i = 1; i < buffer.length; i++) {
+    if ((buffer[i] >= 0 && buffer[i-1] < 0) ||
+        (buffer[i] < 0 && buffer[i-1] >= 0)) {
+      crossings++;
+    }
+  }
+  return crossings / buffer.length;
+}
+
+// Detect speech vs silence in audio
 function detectSilence(event) {
   if (!isRecording) return;
 
   const input = event.inputBuffer.getChannelData(0);
-  const sum = input.reduce((acc, val) => acc + Math.abs(val), 0);
-  const avg = sum / input.length;
+  const now = Date.now();
 
-  if (avg < silenceThreshold) {
+  // Calculate energy metrics
+  const rmsEnergy = calculateRMSEnergy(input);
+  const zcr = calculateZCR(input);
+
+  // Add to energy history
+  energyHistory.push(rmsEnergy);
+  if (energyHistory.length > energyHistorySize) {
+    energyHistory.shift();
+  }
+
+  // Calculate average energy from history for smoother detection
+  const avgEnergy = energyHistory.reduce((sum, e) => sum + e, 0) / energyHistory.length;
+
+  // Adaptive threshold - use ZCR to help distinguish between noise and speech
+  // Speech typically has higher energy and lower ZCR than background noise
+  const isSpeech = avgEnergy > silenceThreshold && zcr < 0.2; // Increased ZCR threshold for better speech detection
+
+  if (!isSpeech) {
     silenceDuration += event.inputBuffer.duration * 1000;
 
     if (silenceDuration >= maxSilenceDuration && !isSilent) {
       // Mark the start of a silence period
-      const now = Date.now();
       lastSilenceStart = now;
       isSilent = true;
+
+      // If we were in a speech segment, end it
+      if (currentSpeechStart > 0) {
+        const speechDuration = now - currentSpeechStart;
+
+        // Only consider meaningful speech segments (longer than minimum duration)
+        if (speechDuration >= minSpeechDuration) {
+          speechSegments.push({
+            start: currentSpeechStart,
+            end: now,
+            duration: speechDuration
+          });
+
+          console.log(`Speech segment detected: ${speechDuration/1000}s`);
+        }
+
+        currentSpeechStart = 0;
+      }
 
       // Notify main process
       if (window.api && window.api.send) {
         window.api.send('audio-recorder:silence-detected', {
           timestamp: now,
-          level: avg
+          level: avgEnergy,
+          zcr: zcr
         });
       }
     }
   } else {
+    // We have speech
+
     // If we were in a silence period, mark its end
     if (isSilent) {
-      const now = Date.now();
       const duration = (now - lastSilenceStart) / 1000;
 
       // Notify main process
@@ -180,6 +242,35 @@ function detectSilence(event) {
 
     // Reset silence counter
     silenceDuration = 0;
+
+    // If we're not tracking a speech segment yet, start one
+    if (currentSpeechStart === 0) {
+      currentSpeechStart = now;
+    } else {
+      // Check if current speech segment is too long and should be split
+      const speechDuration = now - currentSpeechStart;
+      if (speechDuration >= maxSpeechDuration) {
+        // End current segment and start a new one
+        speechSegments.push({
+          start: currentSpeechStart,
+          end: now,
+          duration: speechDuration
+        });
+
+        console.log(`Long speech segment split: ${speechDuration/1000}s`);
+
+        // Start a new segment
+        currentSpeechStart = now;
+
+        // Notify main process about segment split
+        if (window.api && window.api.send) {
+          window.api.send('audio-recorder:segment-split', {
+            timestamp: now,
+            duration: speechDuration / 1000
+          });
+        }
+      }
+    }
   }
 }
 
@@ -238,6 +329,9 @@ function startRecordingInternal(options, filePath) {
     isSilent = false;
     currentFilePath = filePath;
     isRecording = true; // Set recording flag
+    speechSegments = [];
+    currentSpeechStart = 0;
+    energyHistory = [];
 
     // Create media recorder with the best supported format
     let mimeType = 'audio/webm;codecs=opus';
@@ -437,7 +531,8 @@ function startRecordingInternal(options, filePath) {
                 filePath: result.filePath,
                 timestamp: new Date().toISOString(),
                 duration: audioDuration,
-                mimeType: mediaRecorder.mimeType
+                mimeType: mediaRecorder.mimeType,
+                speechSegments: speechSegments
               });
 
               console.log(`Audio recording saved successfully to ${result.filePath}`);

@@ -83,7 +83,6 @@ contextBridge.exposeInMainWorld(
     transcribeAudio: (id) => ipcRenderer.invoke('audio-recorder:transcribe', id),
     deleteAudioRecording: (id) => ipcRenderer.invoke('audio-recorder:delete', id),
     updateAudioRecording: (id, updates) => ipcRenderer.invoke('audio-recorder:update', { id, updates }),
-    getAudioDevices: () => ipcRenderer.invoke('audio-recorder:get-devices'),
 
     // Web history methods
     getWebHistory: (limit, options) => ipcRenderer.invoke('web-history:get', limit, options),
@@ -157,6 +156,18 @@ contextBridge.exposeInMainWorld(
     groupTimelineItems: (items, groupBy) => {
       console.log('Calling groupTimelineItems with groupBy:', groupBy);
       return ipcRenderer.invoke('timeline:group-items', { items, groupBy });
+    },
+    deleteTimelineItem: (data) => {
+      console.log('Calling deleteTimelineItem with:', data);
+      return ipcRenderer.invoke('timeline:delete-item', data);
+    },
+    deleteTimelineItemsByType: (data) => {
+      console.log('Calling deleteTimelineItemsByType with:', data);
+      return ipcRenderer.invoke('timeline:delete-items-by-type', data);
+    },
+    deleteAllTimelineItems: (date) => {
+      console.log('Calling deleteAllTimelineItems with:', date);
+      return ipcRenderer.invoke('timeline:delete-all-items', date);
     },
 
     // General methods

@@ -186,9 +186,15 @@ body {
 
 .timeline-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 15px;
   margin-bottom: 20px;
+}
+
+.timeline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .timeline-title {
@@ -278,6 +284,12 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+}
+
+.timeline-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .timeline-card-title {
@@ -408,6 +420,26 @@ body {
 }
 
 .btn-danger:hover {
+  background-color: var(--danger-dark);
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.delete-item-btn {
+  background-color: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-item-btn:hover {
   background-color: var(--danger-dark);
 }
 

@@ -8,7 +8,7 @@ import { AudioRecording } from '../../database/models';
 import settingsManager from '../settings/settings';
 import aiManager from '../ai-integration/ai-integration';
 import { AudioRecording as AudioRecordingType, ApiResponse } from '../../common/types';
-import { EVENTS, ERROR_MESSAGES, DEFAULT_INTERVALS, STORAGE_PATHS } from '../../common/constants';
+import { ERROR_MESSAGES, DEFAULT_INTERVALS, STORAGE_PATHS } from '../../common/constants';
 import events from '../../common/events';
 
 // Import axios for HTTP requests
@@ -30,6 +30,7 @@ let isRecording = false;
 let currentAudioFile: string | null = null;
 let recordingStartTime: Date | null = null;
 let silenceMarkers: {start: number, end: number}[] = [];
+let speechSegments: {start: number, end: number, duration: number}[] = [];
 let mainWindow: BrowserWindow | null = null;
 
 // Audio recorder options interface
@@ -251,6 +252,7 @@ export function startAudioRecording(): ApiResponse<any> {
     isRecording = true;
     recordingStartTime = new Date();
     silenceMarkers = [];
+    speechSegments = [];
 
     // Get audio options
     const audioOptions = getAudioOptions();
@@ -293,8 +295,8 @@ export function startAudioRecording(): ApiResponse<any> {
 
       // Set up IPC handler for silence detection
       ipcMain.on('audio-recorder:silence-detected', (_event, data) => {
-        const { timestamp, level } = data;
-        console.log(`Silence detected at ${new Date(timestamp).toISOString()}, level: ${level}`);
+        const { timestamp, level, zcr } = data;
+        console.log(`Silence detected at ${new Date(timestamp).toISOString()}, level: ${level}, zcr: ${zcr}`);
 
         // Add to silence markers
         if (silenceMarkers.length === 0 || silenceMarkers[silenceMarkers.length - 1].end !== 0) {
@@ -305,7 +307,7 @@ export function startAudioRecording(): ApiResponse<any> {
         }
 
         // Emit event
-        events.emit(EVENTS.AUDIO.SILENCE_DETECTED, { timestamp, level });
+        events.emit('audio:silence-detected', { timestamp, level, zcr });
       });
 
       // Set up IPC handler for silence ended
@@ -319,7 +321,16 @@ export function startAudioRecording(): ApiResponse<any> {
         }
 
         // Emit event
-        events.emit(EVENTS.AUDIO.SILENCE_ENDED, { timestamp, duration });
+        events.emit('audio:silence-ended', { timestamp, duration });
+      });
+
+      // Set up IPC handler for segment split
+      ipcMain.on('audio-recorder:segment-split', (_event, data) => {
+        const { timestamp, duration } = data;
+        console.log(`Speech segment split at ${new Date(timestamp).toISOString()}, duration: ${duration}s`);
+
+        // Emit event
+        events.emit('audio:segment-split', { timestamp, duration });
       });
 
       // Set up IPC handler for recording data
@@ -372,11 +383,11 @@ export function startAudioRecording(): ApiResponse<any> {
         isRecording = false;
 
         // Emit event
-        events.emit(EVENTS.AUDIO.ERROR, { error });
+        events.emit('audio:error', { error });
       });
 
       // Emit event
-      events.emit(EVENTS.RECORDING.STATUS_CHANGE, { module: 'audio', isRecording: true });
+      events.emit('recording:status-change', { module: 'audio', isRecording: true });
 
       return {
         success: true,
@@ -432,8 +443,18 @@ export async function stopAudioRecording(): Promise<ApiResponse<any>> {
     const audioOptions = getAudioOptions();
 
     // Process the audio file to remove silence if needed
-    const processedFile = await processAudioFile(currentAudioFile, silenceMarkers);
+    const processedFile = await processAudioFile(currentAudioFile, silenceMarkers, speechSegments);
     const finalFilePath = processedFile || currentAudioFile;
+
+    // Check if the file exists and is not empty
+    if (!fs.existsSync(finalFilePath) || fs.statSync(finalFilePath).size === 0) {
+      console.error(`Audio file is empty or does not exist: ${finalFilePath}`);
+      return {
+        success: false,
+        error: ERROR_MESSAGES.FAILED_TO_SAVE_AUDIO,
+        message: 'Audio file is empty or does not exist'
+      };
+    }
 
     // Save to database
     const recording = await AudioRecording.create({
@@ -456,6 +477,7 @@ export async function stopAudioRecording(): Promise<ApiResponse<any>> {
     ipcMain.removeAllListeners('audio-recorder:data');
     ipcMain.removeAllListeners('audio-recorder:silence-detected');
     ipcMain.removeAllListeners('audio-recorder:silence-ended');
+    ipcMain.removeAllListeners('audio-recorder:segment-split');
     ipcMain.removeAllListeners('audio-recorder:error');
 
     // Auto-transcribe if enabled in settings
@@ -473,10 +495,11 @@ export async function stopAudioRecording(): Promise<ApiResponse<any>> {
     currentAudioFile = null;
     recordingStartTime = null;
     silenceMarkers = [];
+    speechSegments = [];
 
     // Emit event
-    events.emit(EVENTS.RECORDING.STATUS_CHANGE, { module: 'audio', isRecording: false });
-    events.emit(EVENTS.AUDIO.PROCESSED, { recordingId, filePath: savedFilePath, duration: durationSec });
+    events.emit('recording:status-change', { module: 'audio', isRecording: false });
+    events.emit('audio:processed', { recordingId, filePath: savedFilePath, duration: durationSec });
 
     return {
       success: true,
@@ -498,7 +521,7 @@ export async function stopAudioRecording(): Promise<ApiResponse<any>> {
 }
 
 // Process audio file to remove silence
-async function processAudioFile(filePath: string, silenceMarkers: {start: number, end: number}[]): Promise<string | null> {
+async function processAudioFile(filePath: string, silenceMarkers: {start: number, end: number}[], speechSegmentsData?: {start: number, end: number, duration: number}[]): Promise<string | null> {
   // If no silence markers or silence detection is disabled, return the original file
   const audioOptions = getAudioOptions();
   if (!audioOptions.silenceDetection || silenceMarkers.length === 0 || !fs.existsSync(filePath)) {
@@ -506,62 +529,154 @@ async function processAudioFile(filePath: string, silenceMarkers: {start: number
   }
 
   try {
+    // Use provided speech segments if available
+    const rendererSpeechSegments = speechSegmentsData || [];
+
+    // Use speech segments from renderer if available, otherwise use silence markers
+    if (rendererSpeechSegments && rendererSpeechSegments.length > 0) {
+      speechSegments = rendererSpeechSegments;
+      console.log(`Using ${speechSegments.length} speech segments from renderer`);
+    }
+
     // Create a processed file path
     const originalExt = path.extname(filePath);
     const baseName = path.basename(filePath, originalExt);
     const processedPath = path.join(path.dirname(filePath), `${baseName}_processed${originalExt}`);
 
-    // Use ffmpeg to process the file
+    // If we have speech segments, process each segment into a separate file
+    if (speechSegments && speechSegments.length > 0) {
+      console.log(`Processing ${speechSegments.length} speech segments`);
+
+      // Create a directory for segments
+      const segmentsDir = path.join(path.dirname(filePath), `${baseName}_segments`);
+      if (!fs.existsSync(segmentsDir)) {
+        fs.mkdirSync(segmentsDir, { recursive: true });
+      }
+
+      // Process each segment
+      const segmentPromises = speechSegments.map((segment, index) => {
+        return new Promise<string>((resolve) => {
+          // Calculate relative timestamps
+          const startTime = recordingStartTime ? recordingStartTime.getTime() : 0;
+          const segmentStart = (segment.start - startTime) / 1000;
+          const segmentEnd = (segment.end - startTime) / 1000;
+          const segmentDuration = segment.duration / 1000;
+
+          // Skip segments that are too short (less than 1 second)
+          if (segmentDuration < 1) {
+            console.log(`Skipping segment ${index} (too short: ${segmentDuration}s)`);
+            resolve('');
+            return;
+          }
+
+          // Create segment file path
+          const segmentPath = path.join(segmentsDir, `segment_${index}${originalExt}`);
+
+          console.log(`Processing segment ${index}: ${segmentStart}s to ${segmentEnd}s (${segmentDuration}s)`);
+
+          // Use ffmpeg to extract segment
+          ffmpeg(filePath)
+            .setStartTime(segmentStart)
+            .setDuration(segmentDuration)
+            .outputOptions('-c:a', 'copy') // Copy audio codec for speed
+            .outputFormat(audioOptions.format)
+            .save(segmentPath)
+            .on('end', () => {
+              // Check if the segment file exists and is not empty
+              if (fs.existsSync(segmentPath)) {
+                const stats = fs.statSync(segmentPath);
+                if (stats.size > 0) {
+                  console.log(`Segment ${index} saved to ${segmentPath} (${stats.size} bytes)`);
+                  resolve(segmentPath);
+                } else {
+                  console.log(`Segment ${index} is empty, skipping`);
+                  // Remove empty file
+                  try {
+                    fs.unlinkSync(segmentPath);
+                  } catch (err) {
+                    console.error(`Error removing empty segment file:`, err);
+                  }
+                  resolve('');
+                }
+              } else {
+                console.log(`Segment ${index} file not created`);
+                resolve('');
+              }
+            })
+            .on('error', (err: Error) => {
+              console.error(`Error processing segment ${index}:`, err);
+              resolve('');
+            });
+        });
+      });
+
+      // Wait for all segments to be processed
+      const segmentPaths = await Promise.all(segmentPromises);
+      const validSegmentPaths = segmentPaths.filter(p => p);
+
+      console.log(`Processed ${validSegmentPaths.length} valid segments`);
+
+      // If we have valid segments, create a manifest file
+      if (validSegmentPaths.length > 0) {
+        const manifestPath = path.join(segmentsDir, 'segments.json');
+        const manifest = {
+          originalFile: filePath,
+          timestamp: recordingStartTime ? recordingStartTime.toISOString() : new Date().toISOString(),
+          segments: speechSegments.map((segment, index) => ({
+            index,
+            start: segment.start,
+            end: segment.end,
+            duration: segment.duration,
+            path: validSegmentPaths[index] || ''
+          }))
+        };
+
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        console.log(`Segment manifest saved to ${manifestPath}`);
+      }
+
+      // Also create a combined processed file using silence markers
+      console.log(`Creating combined processed file: ${processedPath}`);
+    }
+
+    // Use ffmpeg to process the file (removing silence)
     return new Promise<string>((resolve) => {
       console.log(`Processing audio file: ${filePath}`);
       console.log(`Silence markers: ${JSON.stringify(silenceMarkers)}`);
 
-      // Create complex filter for silence removal
-      // This approach uses the 'atrim' filter to keep only the non-silent parts
+      // Use a more direct approach with the silenceremove filter
+      // This is more effective than manually trimming segments
       let filterComplex = '';
-      let segments = [];
 
-      // If we have silence markers, create segments to keep
+      // If we have silence markers, use them to guide the silence removal
       if (silenceMarkers.length > 0) {
-        // Start time of the recording
-        const startTime = recordingStartTime ? recordingStartTime.getTime() : 0;
+        // Calculate average silence duration to use as a reference
+        let totalSilenceDuration = 0;
+        let silenceCount = 0;
 
-        // Create segments for each non-silent part
-        let lastEnd = 0;
-
-        silenceMarkers.forEach((marker, index) => {
-          // Calculate relative timestamps in seconds
-          const segmentStart = lastEnd / 1000;
-          const segmentEnd = (marker.start - startTime) / 1000;
-
-          // Only add segment if it has positive duration
-          if (segmentEnd > segmentStart) {
-            segments.push(`[0:a]atrim=${segmentStart}:${segmentEnd},asetpts=PTS-STARTPTS[s${index}]`);
+        silenceMarkers.forEach(marker => {
+          if (marker.end > marker.start) {
+            totalSilenceDuration += (marker.end - marker.start) / 1000; // Convert to seconds
+            silenceCount++;
           }
-
-          // Update lastEnd for next segment
-          lastEnd = marker.end - startTime;
         });
 
-        // Add final segment if needed
-        // Calculate approximate duration based on file size and audio properties
-        const fileStats = fs.statSync(filePath);
-        const bytesPerSecond = audioOptions.sampleRate * audioOptions.channels * (audioOptions.bitsPerSample / 8);
-        const approximateDuration = fileStats.size / bytesPerSecond;
+        // Default values if we can't calculate from markers
+        let silenceThreshold = 0.015; // Lower threshold for better silence detection
+        let minSilenceDuration = 0.3; // 0.3 seconds - more aggressive silence removal
 
-        if (lastEnd / 1000 < approximateDuration) {
-          const segmentStart = lastEnd / 1000;
-          segments.push(`[0:a]atrim=${segmentStart},asetpts=PTS-STARTPTS[s${silenceMarkers.length}]`);
+        if (silenceCount > 0) {
+          // Use the average silence duration as a guide, but cap it
+          minSilenceDuration = Math.min(totalSilenceDuration / silenceCount, 1.0);
         }
 
-        // Create concat filter if we have segments
-        if (segments.length > 0) {
-          filterComplex = segments.join(';') + ';';
-
-          // Add concat filter
-          const segmentRefs = Array.from({length: segments.length}, (_, i) => `[s${i}]`).join('');
-          filterComplex += `${segmentRefs}concat=n=${segments.length}:v=0:a=1[out]`;
-        }
+        // Use the silenceremove filter directly
+        // This is more effective than manually concatenating segments
+        filterComplex = `[0:a]silenceremove=stop_periods=-1:stop_threshold=${silenceThreshold}:stop_duration=${minSilenceDuration}[out]`;
+      } else {
+        // If no silence markers, still try to remove silence with default parameters
+        // More aggressive silence removal
+        filterComplex = `[0:a]silenceremove=stop_periods=-1:stop_threshold=0.015:stop_duration=0.3[out]`;
       }
 
       // Create ffmpeg command
@@ -584,8 +699,26 @@ async function processAudioFile(filePath: string, silenceMarkers: {start: number
         .audioFrequency(audioOptions.sampleRate)
         .save(processedPath)
         .on('end', () => {
-          console.log(`Audio processed: ${processedPath}`);
-          resolve(processedPath);
+          // Check if the processed file exists and is not empty
+          if (fs.existsSync(processedPath)) {
+            const stats = fs.statSync(processedPath);
+            if (stats.size > 0) {
+              console.log(`Audio processed: ${processedPath} (${stats.size} bytes)`);
+              resolve(processedPath);
+            } else {
+              console.log(`Processed audio file is empty, using original file`);
+              // Remove empty file
+              try {
+                fs.unlinkSync(processedPath);
+              } catch (err) {
+                console.error(`Error removing empty processed file:`, err);
+              }
+              resolve(filePath);
+            }
+          } else {
+            console.log(`Processed audio file not created, using original file`);
+            resolve(filePath);
+          }
         })
         .on('error', (err: Error) => {
           console.error('Error processing audio:', err);
@@ -665,7 +798,7 @@ async function transcribeAudioRecording(recordingId: number): Promise<any> {
     }
 
     // Use AI integration module for transcription
-    let result;
+    let result: any;
 
     // Check if AI manager has transcribeAudio method
     if (typeof aiManager.processAudioRecording === 'function') {
@@ -767,7 +900,7 @@ export function setupAudioRecorderHandlers() {
   ipcMain.on('audio-recorder:recording-complete', async (_event, data) => {
     try {
       console.log('Recording complete event received:', data);
-      const { filePath, timestamp, duration, mimeType } = data;
+      const { filePath, timestamp, duration, mimeType, speechSegments: rendererSpeechSegments } = data;
 
       // Debug: Log all available data
       console.log('Recording complete data:', JSON.stringify(data, null, 2));
@@ -802,6 +935,12 @@ export function setupAudioRecorderHandlers() {
         format = 'wav'; // Default format
       }
 
+      // Check if the file exists and is not empty
+      if (!fs.existsSync(filePath) || stats.size === 0) {
+        console.error(`Audio file is empty or does not exist: ${filePath}`);
+        return { success: false, error: 'Audio file is empty or does not exist' };
+      }
+
       // Save to database
       const recording = await AudioRecording.create({
         path: filePath,
@@ -812,6 +951,7 @@ export function setupAudioRecorderHandlers() {
           format: format,
           mimeType: mimeType || `audio/${format}`,
           silenceMarkers: [],
+          speechSegments: rendererSpeechSegments || [],
           fileSize: stats.size
         }
       });
@@ -891,11 +1031,6 @@ export function setupAudioRecorderHandlers() {
       console.error('Error updating audio recording:', error);
       return { success: false, error: 'Failed to update audio recording' };
     }
-  });
-
-  // Add handler for getting audio devices
-  ipcMain.handle('audio-recorder:get-devices', async () => {
-    return await getAudioDevices();
   });
 
   // Add handler for saving audio blob from renderer
@@ -1108,24 +1243,3 @@ export function setupAudioRecorderHandlers() {
     }
   });
 }
-
-// Get audio devices
-export async function getAudioDevices(): Promise<any> {
-  try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      // Request audio devices from renderer process
-      const devices = await mainWindow.webContents.executeJavaScript('navigator.mediaDevices.enumerateDevices()');
-
-      // Filter audio input devices
-      const audioInputDevices = devices.filter((device: any) => device.kind === 'audioinput');
-
-      return { success: true, devices: audioInputDevices };
-    } else {
-      return { success: false, error: 'Main window is not available', devices: [] };
-    }
-  } catch (error) {
-    console.error('Error getting audio devices:', error);
-    return { success: false, error: 'Failed to get audio devices', devices: [] };
-  }
-}
-

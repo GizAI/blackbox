@@ -82,6 +82,7 @@ export const EVENTS = {
     SILENCE_DETECTED: 'audio:silence-detected',
     SILENCE_ENDED: 'audio:silence-ended',
     TRANSCRIBED: 'audio:transcribed',
+    SEGMENT_SPLIT: 'audio:segment-split',
   },
   WEB_HISTORY: {
     NEW: 'web-history:new',

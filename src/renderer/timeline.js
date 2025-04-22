@@ -222,6 +222,42 @@ export async function initTimeline() {
     });
   }
 
+  // Set up delete buttons
+  const deleteAllBtn = document.getElementById('delete-all-btn');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', () => {
+      deleteAllTimelineItems();
+    });
+  }
+
+  const deleteScreenshotBtn = document.getElementById('delete-screenshot-btn');
+  if (deleteScreenshotBtn) {
+    deleteScreenshotBtn.addEventListener('click', () => {
+      deleteTimelineItemsByType('screenshot');
+    });
+  }
+
+  const deleteAudioBtn = document.getElementById('delete-audio-btn');
+  if (deleteAudioBtn) {
+    deleteAudioBtn.addEventListener('click', () => {
+      deleteTimelineItemsByType('audio');
+    });
+  }
+
+  const deleteWebBtn = document.getElementById('delete-web-btn');
+  if (deleteWebBtn) {
+    deleteWebBtn.addEventListener('click', () => {
+      deleteTimelineItemsByType('web');
+    });
+  }
+
+  const deleteAppBtn = document.getElementById('delete-app-btn');
+  if (deleteAppBtn) {
+    deleteAppBtn.addEventListener('click', () => {
+      deleteTimelineItemsByType('app');
+    });
+  }
+
   // Set up auto-refresh (every 5 minutes)
   startAutoRefresh(5 * 60 * 1000); // 5 minutes in milliseconds
 
@@ -362,7 +398,78 @@ function stopAutoRefresh() {
   }
 }
 
+// Delete a timeline item
+async function deleteTimelineItem(id, type) {
+  try {
+    console.log(`Deleting timeline item: ${id} (${type})`);
+    const result = await window.api.deleteTimelineItem({ id, type });
+
+    if (result.success) {
+      console.log(`Successfully deleted timeline item: ${id}`);
+      // Refresh timeline data
+      refreshTimelineData();
+    } else {
+      console.error(`Failed to delete timeline item: ${result.error || 'Unknown error'}`);
+      alert(`Failed to delete item: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error deleting timeline item:', error);
+    alert('Error deleting item. See console for details.');
+  }
+}
+
+// Delete timeline items by type
+async function deleteTimelineItemsByType(type) {
+  try {
+    if (!confirm(`Are you sure you want to delete all ${type} items?`)) {
+      return;
+    }
+
+    console.log(`Deleting all ${type} items for date: ${currentDate}`);
+    const result = await window.api.deleteTimelineItemsByType({ date: currentDate, type });
+
+    if (result.success) {
+      console.log(`Successfully deleted ${result.count} ${type} items`);
+      // Refresh timeline data
+      refreshTimelineData();
+    } else {
+      console.error(`Failed to delete ${type} items: ${result.error || 'Unknown error'}`);
+      alert(`Failed to delete ${type} items: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`Error deleting ${type} items:`, error);
+    alert(`Error deleting ${type} items. See console for details.`);
+  }
+}
+
+// Delete all timeline items
+async function deleteAllTimelineItems() {
+  try {
+    if (!confirm('Are you sure you want to delete ALL timeline items for this date?')) {
+      return;
+    }
+
+    console.log(`Deleting all timeline items for date: ${currentDate}`);
+    const result = await window.api.deleteAllTimelineItems(currentDate);
+
+    if (result.success) {
+      console.log(`Successfully deleted ${result.count} timeline items`);
+      // Refresh timeline data
+      refreshTimelineData();
+    } else {
+      console.error(`Failed to delete timeline items: ${result.error || 'Unknown error'}`);
+      alert(`Failed to delete timeline items: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error deleting timeline items:', error);
+    alert('Error deleting timeline items. See console for details.');
+  }
+}
+
 // Expose functions globally for navigation.js to use
 window.startAutoRefresh = startAutoRefresh;
 window.stopAutoRefresh = stopAutoRefresh;
 window.refreshTimelineData = refreshTimelineData;
+window.deleteTimelineItem = deleteTimelineItem;
+window.deleteTimelineItemsByType = deleteTimelineItemsByType;
+window.deleteAllTimelineItems = deleteAllTimelineItems;

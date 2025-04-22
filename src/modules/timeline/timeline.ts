@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import { Screenshot, AudioRecording, WebHistory, AppUsage, AIInsight } from '../../database/models';
 import settingsManager from '../settings/settings';
 import { TimelineItem, TimelineGroup } from '../../common/types';
@@ -255,6 +256,176 @@ export async function getTimelineRange(startDate: Date, endDate: Date): Promise<
   }
 }
 
+// Delete a timeline item by ID and type
+export async function deleteTimelineItem(id: number, type: string): Promise<boolean> {
+  try {
+    let filePath = '';
+    let success = false;
+
+    // Delete from database based on type
+    switch (type) {
+      case 'screenshot':
+        const screenshot = await Screenshot.findByPk(id);
+        if (screenshot) {
+          filePath = screenshot.path;
+          await screenshot.destroy();
+          success = true;
+        }
+        break;
+      case 'audio':
+        const audio = await AudioRecording.findByPk(id);
+        if (audio) {
+          filePath = audio.path;
+          await audio.destroy();
+          success = true;
+        }
+        break;
+      case 'web':
+        const web = await WebHistory.findByPk(id);
+        if (web) {
+          await web.destroy();
+          success = true;
+        }
+        break;
+      case 'app':
+        const app = await AppUsage.findByPk(id);
+        if (app) {
+          await app.destroy();
+          success = true;
+        }
+        break;
+      case 'insight':
+        const insight = await AIInsight.findByPk(id);
+        if (insight) {
+          await insight.destroy();
+          success = true;
+        }
+        break;
+      default:
+        return false;
+    }
+
+    // Delete file if it exists
+    if (filePath && fs.existsSync(filePath)) {
+      await fsPromises.unlink(filePath);
+      console.log(`Deleted file: ${filePath}`);
+    }
+
+    return success;
+  } catch (error) {
+    console.error(`Error deleting ${type} item with ID ${id}:`, error);
+    return false;
+  }
+}
+
+// Delete all timeline items of a specific type for a date
+export async function deleteTimelineItemsByType(date: Date, type: string): Promise<number> {
+  try {
+    // Set start and end of day
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let count = 0;
+    let items: any[] = [];
+
+    // Get items based on type
+    switch (type) {
+      case 'screenshot':
+        items = await Screenshot.findAll({
+          where: {
+            timestamp: {
+              [Op.gte]: startOfDay,
+              [Op.lte]: endOfDay
+            }
+          }
+        });
+        break;
+      case 'audio':
+        items = await AudioRecording.findAll({
+          where: {
+            timestamp: {
+              [Op.gte]: startOfDay,
+              [Op.lte]: endOfDay
+            }
+          }
+        });
+        break;
+      case 'web':
+        items = await WebHistory.findAll({
+          where: {
+            timestamp: {
+              [Op.gte]: startOfDay,
+              [Op.lte]: endOfDay
+            }
+          }
+        });
+        break;
+      case 'app':
+        items = await AppUsage.findAll({
+          where: {
+            startTime: {
+              [Op.gte]: startOfDay,
+              [Op.lte]: endOfDay
+            }
+          }
+        });
+        break;
+      case 'insight':
+        items = await AIInsight.findAll({
+          where: {
+            timestamp: {
+              [Op.gte]: startOfDay,
+              [Op.lte]: endOfDay
+            }
+          }
+        });
+        break;
+      default:
+        return 0;
+    }
+
+    // Delete each item
+    for (const item of items) {
+      // Delete file if it exists (for screenshots and audio)
+      if (item.path && fs.existsSync(item.path)) {
+        await fsPromises.unlink(item.path);
+        console.log(`Deleted file: ${item.path}`);
+      }
+
+      // Delete from database
+      await item.destroy();
+      count++;
+    }
+
+    return count;
+  } catch (error) {
+    console.error(`Error deleting ${type} items:`, error);
+    return 0;
+  }
+}
+
+// Delete all timeline items for a date
+export async function deleteAllTimelineItems(date: Date): Promise<number> {
+  try {
+    let totalCount = 0;
+
+    // Delete each type of item
+    totalCount += await deleteTimelineItemsByType(date, 'screenshot');
+    totalCount += await deleteTimelineItemsByType(date, 'audio');
+    totalCount += await deleteTimelineItemsByType(date, 'web');
+    totalCount += await deleteTimelineItemsByType(date, 'app');
+    totalCount += await deleteTimelineItemsByType(date, 'insight');
+
+    return totalCount;
+  } catch (error) {
+    console.error('Error deleting all timeline items:', error);
+    return 0;
+  }
+}
+
 // Set up IPC handlers
 export function setupTimelineHandlers() {
   // Remove any existing handlers to avoid duplicates
@@ -262,6 +433,9 @@ export function setupTimelineHandlers() {
     ipcMain.removeHandler('timeline:get-data');
     ipcMain.removeHandler('timeline:get-range');
     ipcMain.removeHandler('timeline:group-items');
+    ipcMain.removeHandler('timeline:delete-item');
+    ipcMain.removeHandler('timeline:delete-items-by-type');
+    ipcMain.removeHandler('timeline:delete-all-items');
   } catch (error) {
     // Ignore errors if handlers don't exist
   }
@@ -305,6 +479,41 @@ export function setupTimelineHandlers() {
     } catch (error) {
       console.error('Error grouping timeline items:', error);
       return { success: false, error: 'Failed to group timeline items', groups: [] };
+    }
+  });
+
+  // Delete a timeline item
+  ipcMain.handle('timeline:delete-item', async (_event, data) => {
+    try {
+      const { id, type } = data;
+      const success = await deleteTimelineItem(id, type);
+      return { success, id, type };
+    } catch (error) {
+      console.error('Error deleting timeline item:', error);
+      return { success: false, error: 'Failed to delete timeline item' };
+    }
+  });
+
+  // Delete timeline items by type
+  ipcMain.handle('timeline:delete-items-by-type', async (_event, data) => {
+    try {
+      const { date, type } = data;
+      const count = await deleteTimelineItemsByType(new Date(date), type);
+      return { success: true, count, type };
+    } catch (error) {
+      console.error('Error deleting timeline items by type:', error);
+      return { success: false, error: 'Failed to delete timeline items' };
+    }
+  });
+
+  // Delete all timeline items
+  ipcMain.handle('timeline:delete-all-items', async (_event, date) => {
+    try {
+      const count = await deleteAllTimelineItems(new Date(date));
+      return { success: true, count };
+    } catch (error) {
+      console.error('Error deleting all timeline items:', error);
+      return { success: false, error: 'Failed to delete all timeline items' };
     }
   });
 }
